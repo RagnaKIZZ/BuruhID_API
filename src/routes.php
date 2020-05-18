@@ -178,15 +178,16 @@ return function (App $app) {
         $id             = $request->getParsedBodyParam('id');
         $token_login    = $request->getParsedBodyParam('token_login');
         $nama           = $request->getParsedBodyParam('nama');
+        $password       = $request->getParsedBodyParam('password');
 
-        if (empty($nama) || empty($token_login) || empty($id)) {
+        if (empty($nama) || empty($token_login) || empty($id)||empty($password)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi data!"]);
         }
 
-        $query = "UPDATE tb_user set nama = :nama WHERE `user_id` = :id AND `token_login` = :token_login";
+        $query = "UPDATE tb_user set nama = :nama WHERE `user_id` = :id AND `token_login` = :token_login AND `password` = MD5(:password)";
 
         $stmt = $this->db->prepare($query);
-        if ($stmt->execute([':nama' => $nama, ':id' => $id, ':token_login' => $token_login])) {
+        if ($stmt->execute([':nama' => $nama, ':id' => $id, ':token_login' => $token_login, ':password' => $password])) {
             return $response->withJson(["code"=>200, "msg"=>"Update nama berhasil!"]);
         }
         return $response->withJson(["code"=>201, "msg"=>"Update nama gagal!"]);
@@ -196,18 +197,18 @@ return function (App $app) {
     $app->post('/user/update_password', function($request, $response){
         $id             = $request->getParsedBodyParam('id');
         $token_login    = $request->getParsedBodyParam('token_login');
-        $password_lama  = $request->getParsedBodyParam('password_lama');
+        $password_lama  = $request->getParsedBodyParam('password');
         $password_baru  = $request->getParsedBodyParam('password_baru');
 
         if (empty($password_baru) || empty($password_lama) || empty($id) || empty($token_login)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi data!"]);
         }
-        $querySelect = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        $querySelect = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token AND `password` = MD5(:pass)";
         $query = "UPDATE tb_user set `password` = MD5(:password_baru) WHERE `user_id` = :id 
                   AND `token_login` = :token_login AND `password` = MD5(:password_lama)";
 
-        $stmt = $this->db->prepare($query);
-        if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
+        $stmt = $this->db->prepare($querySelect);
+        if ($stmt->execute([':id' => $id, ':token' =>$token_login, ':pass' => $password_lama])) {
             $result = $stmt->fetch();
             if ($result) {
                 $stmt1 = $this->db->prepare($query);
@@ -229,7 +230,7 @@ return function (App $app) {
         $password    = $request->getParsedBodyParam('password');
         $email       = $request->getParsedBodyParam('email');
 
-        $timeParam   = date('Y-m-d H:i:s', time()+2*24*60*60);
+        $timeParam   = "";
         $timeUpdate  = date('Y-m-d H:i:s', time());
 
 
@@ -257,6 +258,12 @@ return function (App $app) {
         if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
             $result = $stmt->fetch();
             $rowUpdate = $result['waktu_update'];
+            $time = strtotime($rowUpdate);
+            $time1 = strtotime($timeUpdate);
+            $time2 = date('Y-m-d H:i:s', $time+2*24*60*60);
+            $timeP = strtotime($time2);
+            $jml = $timeP - $time1;
+            $timeParam = floor($jml/ (60 * 60 * 24));
             // return $rowUpdate;
             if ($result) {
               if (empty($rowUpdate)) {
@@ -264,12 +271,12 @@ return function (App $app) {
                 ':pass' => $password, ':waktu' => $timeUpdate])) {
                     return $response->withJson(["code"=>200, "msg"=>"Update email berhasil!"]);
                 }
-            }else if ($rowUpdate <= $timeParam) {
-                if ($stmtUpdate->execute([':id' => $user_id, ':email' => $email,
+            }else if ($timeParam <= 0) {
+                if ($stmtUpdate->execute([':id' => $id, ':email' => $email,
                 ':pass' => $password, ':waktu' => $timeUpdate])) {
                     return $response->withJson(["code"=>200, "msg"=>"Update email berhasil!"]);
                 }
-            }else if ($rowUpdate > $timeParam) {
+            }else if ($timeParam > 0) {
                 return $response->withJson(["code"=>201, "msg"=>"Email dan nomor telepon hanya bisa diganti 2 hari sekali!"]);
             }
             return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
@@ -286,7 +293,7 @@ return function (App $app) {
         $password    = $request->getParsedBodyParam('password');
         $telepon     = $request->getParsedBodyParam('telepon');
 
-        $timeParam   = date('Y-m-d H:i:s', time()+2*24*60*60);
+        $timeParam   = "";
         $timeUpdate  = date('Y-m-d H:i:s', time());
 
         // return $timeParam;
@@ -315,6 +322,13 @@ return function (App $app) {
         if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
             $result = $stmt->fetch();
             $rowUpdate = $result['waktu_update'];
+            $time = strtotime($rowUpdate);
+            $time1 = strtotime($timeUpdate);
+            $time2 = date('Y-m-d H:i:s', $time+2*24*60*60);
+            $timeP = strtotime($time2);
+            $jml = $timeP - $time1;
+            $timeParam = floor($jml/ (60 * 60 * 24));
+
             // return $rowUpdate;
             if ($result) {
               if (empty($rowUpdate)) {
@@ -322,12 +336,12 @@ return function (App $app) {
                 ':pass' => $password, ':waktu' => $timeUpdate])) {
                     return $response->withJson(["code"=>200, "msg"=>"Update telepon berhasil!"]);
                 }
-            }else if ($rowUpdate > $timeParam) {
+            }else if ($timeParam <= 0) {
                 if ($stmtUpdate->execute([':id' => $id, ':telepon' => $telepon,
                 ':pass' => $password, ':waktu' => $timeUpdate])) {
                     return $response->withJson(["code"=>200, "msg"=>"Update telepon berhasil!"]);
                 }
-            }else if ($rowUpdate < $timeParam) {
+            }else if ($timeParam > 0) {
                 return $response->withJson(["code"=>201, "msg"=>"Email dan nomor telepon hanya bisa diganti 2 hari sekali!"]);
             }
             return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
