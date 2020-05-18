@@ -183,12 +183,20 @@ return function (App $app) {
         if (empty($nama) || empty($token_login) || empty($id)||empty($password)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi data!"]);
         }
-
+        $querySelect = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token AND `password` = MD5(:pass)";
         $query = "UPDATE tb_user set nama = :nama WHERE `user_id` = :id AND `token_login` = :token_login AND `password` = MD5(:password)";
 
-        $stmt = $this->db->prepare($query);
-        if ($stmt->execute([':nama' => $nama, ':id' => $id, ':token_login' => $token_login, ':password' => $password])) {
-            return $response->withJson(["code"=>200, "msg"=>"Update nama berhasil!"]);
+        $stmt1 = $this->db->prepare($querySelect);
+        if ($stmt1->execute([':id' => $id, ':token' =>$token_login, ':pass' => $password])) {
+            $result = $stmt1->fetch();
+            if ($result) {
+                $stmt = $this->db->prepare($query);
+                if ($stmt->execute([':nama' => $nama, ':id' => $id, ':token_login' => $token_login, ':password' => $password])) {
+                    return $response->withJson(["code"=>200, "msg"=>"Update nama berhasil!"]);
+                }
+                return $response->withJson(["code"=>201, "msg"=>"Update nama gagal!"]);
+            }
+            return $response->withJson(["code"=>201, "msg"=>"Password salah!"]);
         }
         return $response->withJson(["code"=>201, "msg"=>"Update nama gagal!"]);
     });
@@ -218,7 +226,7 @@ return function (App $app) {
                 }
                 return $response->withJson(["code"=>201, "msg"=>"Update password gagal!"]);
             }
-            return $response->withJson(["code"=>201, "msg"=>"Update password gagal!"]);
+            return $response->withJson(["code"=>201, "msg"=>"Password salah!"]);
         }
         return $response->withJson(["code"=>201, "msg"=>"Update password gagal!"]);       
     });
@@ -240,7 +248,7 @@ return function (App $app) {
 
         $queryEmail = "SELECT * FROM tb_user WHERE email = :email";
         $query = "SELECT `user_id`, token_login, waktu_update 
-        FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        FROM tb_user WHERE `user_id` = :id AND token_login = :token AND `password` = MD5(:pass)";
 
         $queryUpdate = "UPDATE tb_user SET email = :email, waktu_update = :waktu WHERE `user_id` = :id AND `password` = MD5(:pass) ";
 
@@ -255,7 +263,7 @@ return function (App $app) {
 
         $stmtUpdate = $this->db->prepare($queryUpdate);
         $stmt = $this->db->prepare($query);
-        if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
+        if ($stmt->execute([':id' => $id, ':token' =>$token_login, ":pass" => $password])) {
             $result = $stmt->fetch();
             $rowUpdate = $result['waktu_update'];
             $time = strtotime($rowUpdate);
@@ -281,7 +289,7 @@ return function (App $app) {
             }
             return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
         }
-        return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
+        return $response->withJson(["code"=>201, "msg"=>"Password salah!"]);
     }
     return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
     });
@@ -304,7 +312,7 @@ return function (App $app) {
 
         $queryTelepon = "SELECT * FROM tb_user WHERE telepon = :telepon";
         $query = "SELECT `user_id`, token_login, waktu_update 
-        FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        FROM tb_user WHERE `user_id` = :id AND token_login = :token AND `password` = MD5(:pass)";
 
         $queryUpdate = "UPDATE tb_user SET telepon = :telepon, waktu_update = :waktu WHERE `user_id` = :id AND `password` = MD5(:pass) ";
 
@@ -319,7 +327,7 @@ return function (App $app) {
 
         $stmtUpdate = $this->db->prepare($queryUpdate);
         $stmt = $this->db->prepare($query);
-        if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
+        if ($stmt->execute([':id' => $id, ':token' =>$token_login, ':pass' => $password])) {
             $result = $stmt->fetch();
             $rowUpdate = $result['waktu_update'];
             $time = strtotime($rowUpdate);
@@ -346,7 +354,7 @@ return function (App $app) {
             }
             return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
         }
-        return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
+        return $response->withJson(["code"=>201, "msg"=>"Password salah!"]);
     }
     return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
     });
