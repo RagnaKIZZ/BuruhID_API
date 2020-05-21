@@ -363,18 +363,19 @@ return function (App $app) {
     $app->post('/user/update_foto', function($request, $response){
         $id             = $request->getParsedBodyParam('id');
         $token_login    = $request->getParsedBodyParam('token_login');
-        $nama           = $request->getParsedBodyParam('nama');
+        $nama           = "";
         $uploadedFiles  = $request->getUploadedFiles();
 
         if (empty($id) || empty($token_login)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi data!"]);
         }
 
-        $queryCheck = "SELECT foto FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        $queryCheck = "SELECT foto, nama FROM tb_user WHERE `user_id` = :id AND token_login = :token";
         $stmt = $this->db->prepare($queryCheck);
         if($stmt->execute([':id' => $id, ':token' => $token_login])){
             $result     = $stmt->fetch();
             $rowFoto    = $result['foto'];
+            $nama       = $result['nama'];
             if ($rowFoto <> null) {
                 $directory = $this->get('settings')['upload_customer'];
                 unlink($directory.'/'.$rowFoto);
@@ -399,10 +400,37 @@ return function (App $app) {
         
           $stmt = $this->db->prepare($sql);
           if($stmt->execute([':id' => $id, ':foto' => $file_name, ':token_login' => $token_login])){
-            return $response->withJson(["code"=>200, "msg"=>"Foto berhasil di update!"]);
+            return $response->withJson(["code"=>200, "msg"=>"Foto berhasil di update!", "foto" =>$file_name]);
           }
           return $response->withJson(["code"=>201, "msg"=>"Foto gagal di update!"]);
 
+    });
+
+    $app->post('/user/hapus_foto', function($request, $response){
+        $id             = $request->getParsedBodyParam('id');
+        $token_login    = $request->getParsedBodyParam('token_login');
+
+        if (empty($id) || empty($token_login)) {
+            return $response->withJson(["code"=>201, "msg"=>"Lengkapi data!"]);
+        }
+
+        $query = "UPDATE tb_user SET foto = '' WHERE `user_id` = :id AND token_login = :token";
+        $queryCheck = "SELECT foto FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        $stmt = $this->db->prepare($queryCheck);
+        if($stmt->execute([':id' => $id, ':token' => $token_login])){
+            $result     = $stmt->fetch();
+            $rowFoto    = $result['foto'];
+            if ($rowFoto <> null) {
+                $directory = $this->get('settings')['upload_customer'];
+                unlink($directory.'/'.$rowFoto);
+                $stmt = $this->db->prepare($query);
+                if($stmt->execute([':id' => $id, ':token' => $token_login])){
+                  return $response->withJson(["code"=>200, "msg"=>"Foto berhasil di hapus!"]);
+                }
+                return $response->withJson(["code"=>201, "msg"=>"Foto gagal di hapus!"]);
+            }
+            return $response->withJson(["code"=>201, "msg"=>"Foto kosong!"]);
+        }
     });
 
     //list bank
@@ -550,7 +578,7 @@ return function (App $app) {
         $start_date  = $request->getParsedBodyParam('start_date');
         $end_date    = $request->getParsedBodyParam('end_date');
         $nominal     = $request->getParsedBodyParam('nominal');
-        $angka       = $request->getParsedBodyParam('angka_unik');
+        $angka       = $request->getParsedBodyParam('nominal_promo');
         $promo_id    = $request->getParsedBodyParam('promo_id');
 
         if (empty($id)||empty($token_login)||empty($token_login||
@@ -567,7 +595,7 @@ return function (App $app) {
 
         //untuk menambahkan order, 2
         $queryMakeOrder = "INSERT INTO tb_order (`user_id`, `tukang_id`, 
-        `alamat`, `jobdesk`, `harga`, angka_unik, `promo_id`, `start_date`, `end_date`) VALUES (:id, :tukang_id, :alamat,
+        `alamat`, `jobdesk`, `harga`, harga_promo, `promo_id`, `start_date`, `end_date`) VALUES (:id, :tukang_id, :alamat,
         :jobdesk, :harga, :angka, :promo, :startdate, :enddate)";     
 
         //untuk mendapatkan id order yang nantinya akan ditambahkan dengan nomor telepon, 3
@@ -937,6 +965,9 @@ return function (App $app) {
         tb_order.alamat,
         tb_order.jobdesk,
         tb_order.status_order,
+        tb_order.harga,
+        tb_order.harga_promo,
+        tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
         tb_order.end_date,
@@ -958,6 +989,9 @@ return function (App $app) {
         tb_order.alamat,
         tb_order.jobdesk,
         tb_order.status_order,
+        tb_order.harga,
+        tb_order.harga_promo,
+        tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
         tb_order.end_date,
@@ -1019,6 +1053,9 @@ return function (App $app) {
         tb_order.alamat,
         tb_order.jobdesk,
         tb_order.status_order,
+        tb_order.harga,
+        tb_order.harga_promo,
+        tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
         tb_order.end_date,
@@ -1041,6 +1078,9 @@ return function (App $app) {
         tb_order.alamat,
         tb_order.jobdesk,
         tb_order.status_order,
+        tb_order.harga,
+        tb_order.harga_promo,
+        tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
         tb_order.end_date,
@@ -1489,7 +1529,7 @@ return function (App $app) {
         }
 
         $queryUser      = "SELECT telepon FROM tb_user WHERE `user_id` = :id";
-        $queryGetOrderr = "SELECT promo_id, status_order, `user_id`, harga, angka_unik  FROM tb_order WHERE `id` = :id";
+        $queryGetOrderr = "SELECT promo_id, status_order, `user_id`, harga, harga_promo  FROM tb_order WHERE `id` = :id";
         $queryGetPromo  = "SELECT isi_promo FROM tb_promo WHERE `id` = :id";
         $query          = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
         $updateRespon   = "UPDATE tb_order SET status_order = :status_order WHERE tukang_id = :id AND id = :order";
@@ -1508,20 +1548,15 @@ return function (App $app) {
             $harga = $hasil['harga'];
             $rowStart = $hasil['status_order'];
             $rowPromo = $hasil['promo_id'];
-            $rowAngka = $hasil['angka_unik'];
+            $rowHarPro = $hasil['harga_promo'];
             if ($hasil) {
                 if ($rowStart != '1') {
                     return $response->withJson(["code"=>201, "msg"=>"Update Status gagal!"]); 
                 }else{
-                    if (!empty($rowPromo)) {
-                        $stmtP = $this->db->prepare($queryGetPromo);
-                        if ($stmtP->execute([':id' => $rowPromo])) {
-                            $result     = $stmtP->fetch();
-                            $isiPromo   = $result['isi_promo'];
-                            $nominal    = $harga-($harga*$isiPromo)+$rowAngka;
-                        }
+                    if ($rowPromo != '0') {
+                        $nominal    = $rowHarPro;
                     }else{
-                        $nominal = $harga+$rowAngka;
+                        $nominal = $harga;
                     }
                 }       
             }
