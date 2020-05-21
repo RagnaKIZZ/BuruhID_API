@@ -618,7 +618,7 @@ return function (App $app) {
             $hasil = $stmt->fetch();
             $rowStatusP = $hasil['status_pembayaran'];
             if ($hasil) {
-                if ($rowStatusP != '0' && $rowStatusP != '2'  && $rowStatusP != '1') {
+                if ($rowStatusP != '0' && $rowStatusP != '2'  && $rowStatusP != '1' && $rowStatusP != '4') {
                     return $response->withJson(["code"=>201, "msg"=>"Selesaikan pembayaran terlebih dahulu!"]); 
                 }
                 }
@@ -1022,7 +1022,7 @@ return function (App $app) {
             $result = $stmt->fetch();
             if ($result) {
                 $stmtList = $this->db->prepare($queryListOrder2);
-                if ($stmtList->execute([':id' => $id])) {
+                if ($stmtList->execute([':id' => $id])) {   
                     $resultList = $stmtList->fetchAll();
                     if ($resultList) {
                         return $response->withJson(["code"=>200, "msg"=>"Berhasil mendapatkan data!", "item_count" => $jumlah, "data" => $resultList]);
@@ -1523,7 +1523,13 @@ return function (App $app) {
         $end_pem        = date('Y-m-d H:i:s', time()+2*60*60);
 
         $nominal = "";
-
+        $title = "Order";
+        $message = "";
+        if ($status === '2') {
+            $message = "Yeay! order kamu diterima! Bayar orderanmu supaya tukang tidak menunggu";
+        }elseif($status === '0'){
+            $message = "Yah! order kamu ditolak, Yuk order lagi!";
+        }
         if (empty($tukang_id)||empty($token_login)||empty($order_id)||$status > 2) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data"]);
         }
@@ -1553,7 +1559,7 @@ return function (App $app) {
                 if ($rowStart != '1') {
                     return $response->withJson(["code"=>201, "msg"=>"Update Status gagal!"]); 
                 }else{
-                    if ($rowPromo != '0') {
+                    if ($rowHarPro != '0') {
                         $nominal    = $rowHarPro;
                     }else{
                         $nominal = $harga;
@@ -1568,6 +1574,43 @@ return function (App $app) {
             if ($result) {
                 $stmtUpOrder    = $this->db->prepare($updateRespon);
                 $stmtUpOrder->execute([':status_order' => $status, ':id' => $tukang_id, ':order' => $order_id]);
+                $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`) VALUE ('$user_id', '$title', '$message')";
+                $stmtNotif = $this->db->prepare($queryNotif);
+                $stmtNotif->execute();
+                            
+                $sql = "SELECT `token_firebase` FROM `tb_user` WHERE `user_id` = '$user_id'";
+
+                $stmt = $this->db->prepare($sql);
+                if($stmt->execute()){
+                    $result1 = $stmt->fetch();
+                    $rowToken[] = $result1['token_firebase'];
+                    if ($result1) {
+                            $url = 'https://fcm.googleapis.com/fcm/send';
+                            $fields = array(
+                                'registration_ids' => $rowToken,
+                                'data' => array("title" => $title,"message" => $message)
+                                );
+
+                            $headers = array(
+                                'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
+                                'Content-Type: application/json'
+                                );
+
+                                $ch = curl_init();
+                                curl_setopt($ch, CURLOPT_URL, $url);
+                                curl_setopt($ch, CURLOPT_POST, true);
+                                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                                curl_setopt ($ch, CURLOPT_SSL_VERIFYHOST, 0);  
+                                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($fields));
+                                $result1 = curl_exec($ch);           
+                                if ($result1 === FALSE) {
+                                    die('Curl failed: ' . curl_error($ch));
+                                    return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
+                                }
+                                curl_close($ch);
+                                }
                 if ($status === '2') {
                     $stmtInsertPembayaran = $this->db->prepare($queryPayment);
                     if ($stmtInsertPembayaran->execute([':order_id' => $order_id, ':id' => $user_id, ':tukang_id' => $tukang_id,
@@ -1584,12 +1627,10 @@ return function (App $app) {
                         $code_pembayaran = "TR".$rowTelepon.$rowIdPem;
                         if ($stmtUpPem->execute([':code_pembayaran' => $code_pembayaran, ':id' => $rowIdPem, ':u_id' => $user_id])) {
                             return $response->withJson(["code"=>200, "msg"=>"Order diterima!"]); 
+                        }
                         }else{
                             return $response->withJson(["code"=>201, "msg"=>"Update pembayaran gagal!"]); 
                         }    
-                    }else{
-                         return $response->withJson(["code"=>201, "msg"=>"Insert pembayaran gagal!"]); 
-                    }
                 }elseif($status === '0'){
                     $stmtKerja = $this->db->prepare($queryStatusTukang);
                     if ($stmtKerja->execute([':id' => $tukang_id, ':kerja' => $status])) {
@@ -1602,6 +1643,7 @@ return function (App $app) {
             return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
         }
         return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
+    }
     });
 
 
