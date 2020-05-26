@@ -120,7 +120,7 @@ return function (App $app) {
         $token_login    = $request->getParsedBodyParam('token');
 
         $queryCheck = "SELECT * FROM tb_user WHERE `user_id` = :id AND `token_login` = :token AND is_login = '1'";
-        $query = "UPDATE tb_user set is_login = '0' WHERE `user_id` = :id AND `token_login` = :token AND is_login = '1'";
+        $query = "UPDATE tb_user set is_login = '0', token_firebase = '' WHERE `user_id` = :id AND `token_login` = :token AND is_login = '1'";
         
         $stmt1 = $this->db->prepare($queryCheck);
         if($stmt1->execute([':id' => $id, ':token' => $token_login])){
@@ -684,10 +684,10 @@ return function (App $app) {
         $user_id     = $request->getParsedBodyParam('user_id');
         $token_login = $request->getParsedBodyParam('token_login');
         $order_id    = $request->getParsedBodyParam('order_id');
-        $tukang_id   = $request->getParsedBodyParam('tukang_id');
+        $tukang_id   = "";
 
         $query          =   "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
-        $queryCheck     =   "SELECT id, status_order FROM tb_order WHERE `id` = :order_id AND `user_id` = :id";
+        $queryCheck     =   "SELECT id, status_order, tukang_id FROM tb_order WHERE `id` = :order_id AND `user_id` = :id";
         $queryCancel    =   "UPDATE
                             tb_order
                             INNER JOIN status_tukang ON tb_order.tukang_id = status_tukang.tukang_id
@@ -698,16 +698,17 @@ return function (App $app) {
                             INNER JOIN tb_pembayaran ON tb_order.id = tb_pembayaran.order_id
                             INNER JOIN status_tukang ON tb_order.tukang_id = status_tukang.tukang_id
                             SET tb_order.status_order = '0', tb_pembayaran.status_pembayaran = '4', status_tukang.kerja = '0'
-                            WHERE (tb_pembayaran.status_pembayaran = '0' OR tb_pembayaran.status_pembayaran = '2')
+                            WHERE (tb_pembayaran.status_pembayaran = '0' OR tb_pembayaran.status_pembayaran = '3')
                             AND tb_order.status_order = '2' AND status_tukang.tukang_id = :tukang_id
                             AND tb_order.id = :order AND tb_order.user_id = :id";
-
+        $queryCheckPem = "SELECT status_pembayaran FROM tb_pembayaran WHERE order_id = '$order_id'";
         $stmt = $this->db->prepare($queryCheck);
         $stmtUser = $this->db->prepare($query);
         $stmtUpdate = $this->db->prepare($queryCancel);
         $stmtUpdate2 = $this->db->prepare($queryCancel2);
+        $stmtCheck = $this->db->prepare($queryCheckPem);
 
-        if (empty($user_id)||empty($token_login)||empty($order_id)||empty($tukang_id)) {
+        if (empty($user_id)||empty($token_login)||empty($order_id)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data"]);
         }
 
@@ -717,16 +718,26 @@ return function (App $app) {
                 if ($stmt->execute([':id' => $user_id, ':order_id' => $order_id])) {
                     $result     = $stmt->fetch();
                     $rowStatus  = $result['status_order']; 
+                    $tukang_id = $result['tukang_id'];
                     if ($result && $rowStatus === '1') {
                         if ($stmtUpdate->execute([':tukang_id' => $tukang_id, ':order' => $order_id])) {
                             return $response->withJson(["code"=>200, "msg"=>"Order dibatalkan!"]);
                        }
                        return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
                     }elseif ($result && $rowStatus === '2') {
-                        if ($stmtUpdate2->execute([':tukang_id' => $tukang_id, ':id' => $user_id, ':order' => $order_id])) {
-                            return $response->withJson(["code"=>200, "msg"=>"Order dibatalkan!"]);
+                           if ($stmtCheck->execute()) {
+                               $cek = $stmtCheck->fetch();
+                               $rowstat = $cek['status_pembayaran'];
+                               if ($cek && $rowstat === '1') {
+                                return $response->withJson(["code"=>201, "msg"=>"Pembayaran sedang diproses!"]);
+                               }else if ($cek && ($rowstat === '3' || $rowstat === '0')) {
+                                $stmtUpdate2->execute([':tukang_id' => $tukang_id, ':id' => $user_id, ':order' => $order_id]);
+                                return $response->withJson(["code"=>200, "msg"=>"Order dibatalkan!"]);      
+                               }else{
+                                return $response->withJson(["code"=>201, "msg"=>"Pembayaran sudah diterima!"]);
+                               }
                        }
-                       return $response->withJson(["code"=>201, "msg"=>"Pembayran sedang diproses!"]);
+                       return $response->withJson(["code"=>201, "msg"=>"Pembayaran sedang diproses1!"]);
                     }
                     return $response->withJson(["code"=>201, "msg"=>"Parameter salah!"]);
                 }
@@ -742,19 +753,18 @@ return function (App $app) {
         $user_id     = $request->getParsedBodyParam('user_id');
         $token_login = $request->getParsedBodyParam('token_login');
         $payment_id  = $request->getParsedBodyParam('payment_id');
-        $order_id    = $request->getParsedBodyParam('order_id');
         $uploadedFiles  = $request->getUploadedFiles();
 
-        if (empty($user_id)||empty($token_login)||empty($order_id)||empty($payment_id)) {
+        if (empty($user_id)||empty($token_login)||empty($payment_id)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data"]);
         }
 
         if (!$uploadedFiles) {
-            return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data"]);
+            return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data1"]);
         }
 
         $query          = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
-        $queryCheck     = "SELECT status_pembayaran, bukti_pembayaran FROM tb_pembayaran WHERE `user_id` = :id AND order_id = :order AND id = :payment_id";
+        $queryCheck     = "SELECT status_pembayaran, bukti_pembayaran FROM tb_pembayaran WHERE `user_id` = :id AND id = :payment_id";
         $queryUpdate    = "UPDATE tb_pembayaran SET status_pembayaran = '1', bukti_pembayaran = :foto WHERE id = :payment_id";
 
         $stmt = $this->db->prepare($queryCheck);       
@@ -771,18 +781,18 @@ return function (App $app) {
         if ($stmtUser->execute([':id' => $user_id, ':token' =>$token_login])) {
             $result1 = $stmtUser->fetch();
             if ($result1) { 
-                if ($stmt->execute([':id' => $user_id, ':order' => $order_id, ':payment_id' => $payment_id])) {
+                if ($stmt->execute([':id' => $user_id, ':payment_id' => $payment_id])) {
                     $result = $stmt->fetch();
                     $rowStatus = $result['status_pembayaran'];
                     $rowFoto    = $result['bukti_pembayaran'];
-                    if ($rowStatus === '0'||$rowStatus === '2') {
+                    if ($rowStatus === '0'||$rowStatus === '3') {
                         if ($rowFoto <> null) {
                             $directory = $this->get('settings')['upload_payment'];
                             unlink($directory.'/'.$rowFoto);
                         }
                         if($uploadedFile->getError()===UPLOAD_ERR_OK){
                             $exetension = pathinfo($uploadedFile->getClientFilename(),PATHINFO_EXTENSION);
-                            $file_name = sprintf('%s.%0.8s', $uuid.$order_id, $exetension);
+                            $file_name = sprintf('%s.%0.8s', $uuid.$user_id, $exetension);
                             $directory = $this->get('settings')['upload_payment'];
                             $uploadedFile->moveTo($directory . DIRECTORY_SEPARATOR . $file_name);
                 
@@ -793,9 +803,9 @@ return function (App $app) {
                           }
                           return $response->withJson(["code"=>201, "msg"=>"Pembayaran gagal!"]);
                     }
-                    return $response->withJson(["code"=>201, "msg"=>"Pembayaran gagal!"]);
+                    return $response->withJson(["code"=>201, "msg"=>"Pembayaran gagal2!"]);
                 }
-                return $response->withJson(["code"=>201, "msg"=>"Pembayaran gagal!"]);
+                return $response->withJson(["code"=>201, "msg"=>"Pembayaran gagal1!"]);
               }
               return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
         }
@@ -943,6 +953,69 @@ return function (App $app) {
             }
         return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
     }
+    });
+
+
+    $app->post('/user/getNotif', function($request, $response){
+        $id          = $request->getParsedBodyParam('id');
+        $token_login = $request->getParsedBodyParam('token_login');
+
+        $query      = "SELECT * FROM tb_notif_user WHERE `user_id` = :id";
+        $queryNotif = "UPDATE tb_notif_user SET isRead = '1' WHERE `user_id` = :id";
+        $queryCheck = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+
+        $stmt = $this->db->prepare($queryCheck);
+        if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmtNotif = $this->db->prepare($query);
+                if ($stmtNotif->execute([':id' => $id])) {
+                    $hasil = $stmtNotif->fetchAll();
+                    if ($hasil) {
+                        $stmtNotif2 = $this->db->prepare($queryNotif);
+                        if ($stmtNotif2->execute([':id' => $id])) {
+                            return $response->withJson(["code"=>200, "msg"=>"Notif didapatkan!", "data" => $hasil]);
+                        }
+                    }
+                    return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+                }
+                return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+            }
+            return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+        }
+        return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+
+    });
+
+
+    $app->post('/user/getCountPromoAndNotif', function($request, $response){
+        $id          = $request->getParsedBodyParam('id');
+        $token_login = $request->getParsedBodyParam('token_login');
+        $end_pem     = date('Y-m-d H:i:s', time());
+
+        $query = "SELECT * FROM tb_notif_user WHERE `user_id` = :id and isRead = '0'";
+        $queryCheck = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        $queryPromo = "SELECT * FROM tb_promo WHERE `start_date` <= :waktu AND end_date > :waktu";
+
+        $stmt = $this->db->prepare($queryCheck);
+        if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmtNotif = $this->db->prepare($query);
+                $stmtPromo = $this->db->prepare($queryPromo);
+                if ($stmtNotif->execute([':id' => $id]) &&  $stmtPromo->execute([':waktu' => $end_pem])) {
+                    $promo = $stmtPromo->fetchAll();
+                    $notif = $stmtNotif->fetchAll();
+                    $countNotif = count($notif);
+                    $countPromo = count($promo);
+                    return $response->withJson(["code"=>200, "msg"=>"Berhasil mendapatkan data!", "countNotif" => $countNotif, "countPromo" => $countPromo]);
+                }
+                return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+            }
+            return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+        }
+        return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+
     });
 
     
@@ -1095,7 +1168,7 @@ return function (App $app) {
         INNER JOIN tb_tukang ON tb_order.tukang_id = tb_tukang.tukang_id
         WHERE (tb_order.status_order = 0 OR tb_order.status_order = 4)
         AND (tb_order.user_id = :id)
-        ORDER BY  tb_order.order_date ASC LIMIT 30 OFFSET $page_count";
+        ORDER BY  tb_order.order_date DESC LIMIT 30 OFFSET $page_count";
 
         $stmt = $this->db->prepare($queryListOrder);
         if ($stmt->execute([':id' => $id])) {
@@ -1152,7 +1225,7 @@ return function (App $app) {
         tb_pembayaran
         INNER JOIN tb_tukang ON tb_pembayaran.tukang_id = tb_tukang.tukang_id
         WHERE tb_pembayaran.`user_id` = :id 
-        AND (tb_pembayaran.status_pembayaran < 3)";
+        AND (tb_pembayaran.status_pembayaran = 3 OR tb_pembayaran.status_pembayaran < 2)";
 
         $queryPaymentList = "SELECT
         tb_pembayaran.id,
@@ -1170,8 +1243,8 @@ return function (App $app) {
         tb_pembayaran
         INNER JOIN tb_tukang ON tb_pembayaran.tukang_id = tb_tukang.tukang_id
         WHERE tb_pembayaran.`user_id` = :id 
-        AND (tb_pembayaran.status_pembayaran < 3)
-        ORDER BY tb_pembayaran.`create_date` LIMIT 30 OFFSET $page_count";
+        AND (tb_pembayaran.status_pembayaran = 3 OR tb_pembayaran.status_pembayaran < 2)
+        ORDER BY tb_pembayaran.`create_date`DESC LIMIT 30 OFFSET $page_count";
 
           $stmt = $this->db->prepare($queryPayment);
           if ($stmt->execute([':id' => $id])) {
@@ -1229,7 +1302,7 @@ return function (App $app) {
         tb_pembayaran
         INNER JOIN tb_tukang ON tb_pembayaran.tukang_id = tb_tukang.tukang_id
         WHERE tb_pembayaran.`user_id` = :id 
-        AND ( tb_pembayaran.status_pembayaran > 2)";
+        AND ( tb_pembayaran.status_pembayaran = 2 OR tb_pembayaran.status_pembayaran > 3)";
 
         $queryPaymentList = "SELECT
         tb_pembayaran.id,
@@ -1247,7 +1320,7 @@ return function (App $app) {
         tb_pembayaran
         INNER JOIN tb_tukang ON tb_pembayaran.tukang_id = tb_tukang.tukang_id
         WHERE tb_pembayaran.`user_id` = :id 
-        AND ( tb_pembayaran.status_pembayaran > 2)
+        AND ( tb_pembayaran.status_pembayaran = 2 OR tb_pembayaran.status_pembayaran > 3)
         ORDER BY tb_pembayaran.`create_date` LIMIT 30 OFFSET $page_count";
 
           $stmt = $this->db->prepare($queryPayment);
@@ -1584,7 +1657,7 @@ return function (App $app) {
                 if($stmt->execute()){
                     $result1 = $stmt->fetch();
                     $rowToken[] = $result1['token_firebase'];
-                    if ($result1) {
+                    if ($rowToken) {
                             $url = 'https://fcm.googleapis.com/fcm/send';
                             $fields = array(
                                 'registration_ids' => $rowToken,
@@ -1668,7 +1741,7 @@ return function (App $app) {
                             FROM
                             tb_order
                             INNER JOIN tb_pembayaran ON tb_order.id = tb_pembayaran.order_id
-                            WHERE tb_pembayaran.status_pembayaran = '3' 
+                            WHERE tb_pembayaran.status_pembayaran = '2' 
                             AND tb_order.status_order = '2' AND tb_order.id = :id";
                             
         $queryStatusTukang = "UPDATE status_tukang set kerja = '2' WHERE tukang_id = :id";
