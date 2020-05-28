@@ -579,10 +579,11 @@ return function (App $app) {
         $end_date    = $request->getParsedBodyParam('end_date');
         $nominal     = $request->getParsedBodyParam('nominal');
         $angka       = $request->getParsedBodyParam('nominal_promo');
+        $angka_unik  = $request->getParsedBodyParam('angka_unik');
         $promo_id    = $request->getParsedBodyParam('promo_id');
 
         if (empty($id)||empty($token_login)||empty($token_login||
-        empty($alamat)||empty($jobdesk)||empty($start_date)||empty($end_date)||empty($nominal))) {
+        empty($alamat)||empty($jobdesk)||empty($start_date)||empty($end_date)||empty($nominal)||empty($angka_unik))) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data"]);
         }
         
@@ -595,8 +596,8 @@ return function (App $app) {
 
         //untuk menambahkan order, 2
         $queryMakeOrder = "INSERT INTO tb_order (`user_id`, `tukang_id`, 
-        `alamat`, `jobdesk`, `harga`, harga_promo, `promo_id`, `start_date`, `end_date`) VALUES (:id, :tukang_id, :alamat,
-        :jobdesk, :harga, :angka, :promo, :startdate, :enddate)";     
+        `alamat`, `jobdesk`, `harga`, harga_promo, angka_unik, `promo_id`, `start_date`, `end_date`) VALUES (:id, :tukang_id, :alamat,
+        :jobdesk, :harga, :angka, :unik,:promo, :startdate, :enddate)";     
 
         //untuk mendapatkan id order yang nantinya akan ditambahkan dengan nomor telepon, 3
         $queryIdOrder = "SELECT `user_id`, max(id) AS id FROM tb_order WHERE `user_id` = :id GROUP BY `user_id` ORDER BY id DESC ";
@@ -648,7 +649,7 @@ return function (App $app) {
             if ($result) {
                 $stmtInsertOrder = $this->db->prepare($queryMakeOrder);
                 if ($stmtInsertOrder->execute([':id' => $id, ':tukang_id' => $tukang_id, ':alamat' => $alamat,
-                ':jobdesk' => $jobdesk, ':harga' => $nominal, ':angka' => $angka, ':promo' => $promo_id,
+                ':jobdesk' => $jobdesk, ':harga' => $nominal, ':angka' => $angka, ':unik' => $angka_unik,':promo' => $promo_id,
                 ':startdate' => $newStartDate, ':enddate' => $newEndDate])) {
                     $stmtSelectOrder = $this->db->prepare($queryIdOrder);
                     if ($stmtSelectOrder->execute([':id' => $id])) {
@@ -764,7 +765,7 @@ return function (App $app) {
         }
 
         $query          = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
-        $queryCheck     = "SELECT status_pembayaran, bukti_pembayaran FROM tb_pembayaran WHERE `user_id` = :id AND id = :payment_id";
+        $queryCheck     = "SELECT status_pembayaran, bukti_pembayaran, code_pembayaran FROM tb_pembayaran WHERE `user_id` = :id AND id = :payment_id";
         $queryUpdate    = "UPDATE tb_pembayaran SET status_pembayaran = '1', bukti_pembayaran = :foto WHERE id = :payment_id";
 
         $stmt = $this->db->prepare($queryCheck);       
@@ -795,7 +796,7 @@ return function (App $app) {
                             $file_name = sprintf('%s.%0.8s', $uuid.$user_id, $exetension);
                             $directory = $this->get('settings')['upload_payment'];
                             $uploadedFile->moveTo($directory . DIRECTORY_SEPARATOR . $file_name);
-                
+                            
                             if($stmtUpdate->execute([':payment_id' => $payment_id, ':foto' => $file_name])){
                                 return $response->withJson(["code"=>200, "msg"=>"Pembayaran berhasil diproses!"]);
                               }
@@ -817,7 +818,7 @@ return function (App $app) {
         $user_id     = $request->getParsedBodyParam('user_id');
         $token_login = $request->getParsedBodyParam('token_login');
         $order_id    = $request->getParsedBodyParam('order_id');
-        $tukang_id   = $request->getParsedBodyParam('tukang_id');
+        $tukang_id   = "";
         $end_order   = date('Y-m-d H:i:s', time());
 
         $query          = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
@@ -829,13 +830,13 @@ return function (App $app) {
                             WHERE tb_order.status_order = '3' AND status_tukang.tukang_id = :tukang_id 
                             AND tb_order.id = :order";
 
-        $queryCheck     =   "SELECT id, status_order FROM tb_order WHERE `id` = :order_id AND `user_id` = :id";
+        $queryCheck     =   "SELECT id, status_order, tukang_id, code_order FROM tb_order WHERE `id` = :order_id AND `user_id` = :id";
 
         $stmtUser = $this->db->prepare($query);
         $stmtUpdate = $this->db->prepare($queryFinish);
         $stmt = $this->db->prepare($queryCheck);       
 
-        if (empty($user_id)||empty($token_login)||empty($order_id)||empty($tukang_id)) {
+        if (empty($user_id)||empty($token_login)||empty($order_id)) {
             return $response->withJson(["code"=>201, "msg"=>"Lengkapi Data"]);
         }
 
@@ -845,9 +846,51 @@ return function (App $app) {
                 if ($stmt->execute([':id' => $user_id, ':order_id' => $order_id])) {
                     $result3     = $stmt->fetch();
                     $rowStatus  = $result3['status_order']; 
+                    $tukang_id = $result3['tukang_id'];
+                    $codeOrder = $result3['code_order'];
                     if ($result3 && $rowStatus === '3') {
                         if ($stmtUpdate->execute([':tukang_id' => $tukang_id, ':order' => $order_id, ':endorder' => $end_order])) {
-                            return $response->withJson(["code"=>200, "msg"=>"Order selesai!"]);
+                            $title = "Order";
+                            $message = "Yeay! orderan $codeOrder telah selesai! Terimakasih telah menggunakan jasa kami!";
+                            $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`) VALUE ('$user_id', '$title', '$message')";
+                            $stmtNotif = $this->db->prepare($queryNotif);
+                            $stmtNotif->execute();
+                                        
+                            $sql = "SELECT `token_firebase` FROM `tb_user` WHERE `user_id` = '$user_id'";
+            
+                            $stmt = $this->db->prepare($sql);
+                            if($stmt->execute()){
+                                $result1 = $stmt->fetch();
+                                $rowToken[] = $result1['token_firebase'];
+                                if ($rowToken) {
+                                        $url = 'https://fcm.googleapis.com/fcm/send';
+                                        $fields = array(
+                                            'registration_ids' => $rowToken,
+                                            'data' => array("title" => $title,"message" => $message)
+                                            );
+            
+                                        $headers = array(
+                                            'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
+                                            'Content-Type: application/json'
+                                            );
+            
+                                            $ch = curl_init();
+                                            curl_setopt($ch, CURLOPT_URL, $url);
+                                            curl_setopt($ch, CURLOPT_POST, true);
+                                            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                                            curl_setopt ($ch, CURLOPT_SSL_VERIFYHOST, 0);  
+                                            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                                            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($fields));
+                                            $result1 = curl_exec($ch);           
+                                            if ($result1 === FALSE) {
+                                                die('Curl failed: ' . curl_error($ch));
+                                                return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
+                                            }
+                                            curl_close($ch);
+                                            }
+                                            return $response->withJson(["code"=>200, "msg"=>"Order selesai!"]);
+                                        }
                         }
                         return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
                     }else{
@@ -988,6 +1031,35 @@ return function (App $app) {
     });
 
 
+    $app->post('/user/getListPromo', function($request, $response){
+        $id          = $request->getParsedBodyParam('id');
+        $token_login = $request->getParsedBodyParam('token_login');
+        $end_pem     = date('Y-m-d H:i:s', time());
+
+        $query      = "SELECT * FROM tb_promo WHERE `start_date` <= :waktu AND end_date > :waktu";
+        $queryCheck = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+
+        $stmt = $this->db->prepare($queryCheck);
+        if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmtNotif = $this->db->prepare($query);
+                if ($stmtNotif->execute([':waktu' => $end_pem])) {
+                    $hasil = $stmtNotif->fetchAll();
+                    if ($hasil) {
+                        return $response->withJson(["code"=>200, "msg"=>"Promo didapatkan!", "data" => $hasil]);
+                    }
+                    return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+                }
+                return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+            }
+            return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+        }
+        return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+
+    });
+
+
     $app->post('/user/getCountPromoAndNotif', function($request, $response){
         $id          = $request->getParsedBodyParam('id');
         $token_login = $request->getParsedBodyParam('token_login');
@@ -1040,6 +1112,7 @@ return function (App $app) {
         tb_order.status_order,
         tb_order.harga,
         tb_order.harga_promo,
+        tb_order.angka_unik,
         tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
@@ -1064,6 +1137,7 @@ return function (App $app) {
         tb_order.status_order,
         tb_order.harga,
         tb_order.harga_promo,
+        tb_order.angka_unik,
         tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
@@ -1128,6 +1202,7 @@ return function (App $app) {
         tb_order.status_order,
         tb_order.harga,
         tb_order.harga_promo,
+        tb_order.angka_unik,
         tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
@@ -1153,6 +1228,7 @@ return function (App $app) {
         tb_order.status_order,
         tb_order.harga,
         tb_order.harga_promo,
+        tb_order.angka_unik,
         tb_order.promo_id,
         tb_order.order_date,
         tb_order.start_date,
@@ -1586,6 +1662,13 @@ return function (App $app) {
         return $response->withJson(["code"=>201, "msg"=>"Update token gagal!"]);
     });
 
+    $app->get('/angka/', function($request, $response){
+        $angka = "1000";
+        $angka1 = "234";
+        $angkahasill = $angka+$angka1;
+        return $response->withJson(["code"=>201, "msg"=>$angkahasill]);
+    });
+
     $app->post('/tukang/respon_order', function($request, $response){
         $user_id        = "";
         $tukang_id      = $request->getParsedBodyParam('tukang_id');
@@ -1601,7 +1684,7 @@ return function (App $app) {
         $codeOrder = "";
 
         $queryUser      = "SELECT telepon FROM tb_user WHERE `user_id` = :id";
-        $queryGetOrderr = "SELECT promo_id, status_order, `user_id`, harga, harga_promo, code_order  FROM tb_order WHERE `id` = :id";
+        $queryGetOrderr = "SELECT promo_id, status_order, `user_id`, harga, harga_promo, code_order, angka_unik  FROM tb_order WHERE `id` = :id";
         $queryGetPromo  = "SELECT isi_promo FROM tb_promo WHERE `id` = :id";
         $query          = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
         $updateRespon   = "UPDATE tb_order SET status_order = :status_order WHERE tukang_id = :id AND id = :order";
@@ -1622,6 +1705,7 @@ return function (App $app) {
             $rowPromo = $hasil['promo_id'];
             $rowHarPro = $hasil['harga_promo'];
             $codeOrder = $hasil['code_order'];
+            $rowAngka = $hasil['angka_unik'];
             if ($hasil) {
                 if ($rowStart != '1') {
                     return $response->withJson(["code"=>201, "msg"=>"Update Status gagal!"]); 
@@ -1629,7 +1713,7 @@ return function (App $app) {
                     if ($rowHarPro != '0') {
                         $nominal    = $rowHarPro;
                     }else{
-                        $nominal = $harga;
+                        $nominal = $harga+$angka_unik;
                     }
                 }       
             }
