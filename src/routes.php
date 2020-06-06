@@ -7,6 +7,7 @@ use Slim\Http\Response;
 return function (App $app) {
     date_default_timezone_set('Asia/Jakarta');
     $container = $app->getContainer();
+    $thisdate       = date('Y-m-d H:i:s', time());
 
     // $app->get('/[{name}]', function (Request $request, Response $response, array $args) use ($container) {
     //     // Sample log message
@@ -514,7 +515,8 @@ return function (App $app) {
         WHERE (status_tukang.aktivasi = '1' AND status_tukang.aktif = '1' AND status_tukang.kerja = '0')
         AND (alamat_tukang.kota = '$kota' OR alamat_tukang.kecamatan = '$kecamatan')
         AND ($condition)
-        ORDER BY tb_tukang.rating AND tb_tukang.anggota DESC LIMIT 30 OFFSET $page_count";
+        ORDER BY RAND() LIMIT 30 OFFSET $page_count";
+       // -- ORDER BY tb_tukang.rating AND tb_tukang.anggota DESC LIMIT 30 OFFSET $page_count";
 
         $stmt = $this->db->prepare($query);
         if ($stmt->execute([':id' => $id, ':token' =>$token_login])) {
@@ -581,6 +583,7 @@ return function (App $app) {
         $angka       = $request->getParsedBodyParam('nominal_promo');
         $angka_unik  = $request->getParsedBodyParam('angka_unik');
         $promo_id    = $request->getParsedBodyParam('promo_id');
+        $thisdate       = date('Y-m-d H:i:s', time());
 
         if (empty($id)||empty($token_login)||empty($token_login||
         empty($alamat)||empty($jobdesk)||empty($start_date)||empty($end_date)||empty($nominal)||empty($angka_unik))) {
@@ -596,8 +599,8 @@ return function (App $app) {
 
         //untuk menambahkan order, 2
         $queryMakeOrder = "INSERT INTO tb_order (`user_id`, `tukang_id`, 
-        `alamat`, `jobdesk`, `harga`, harga_promo, angka_unik, `promo_id`, `start_date`, `end_date`) VALUES (:id, :tukang_id, :alamat,
-        :jobdesk, :harga, :angka, :unik,:promo, :startdate, :enddate)";     
+        `alamat`, `jobdesk`, `harga`, harga_promo, angka_unik, `promo_id`, order_date, `start_date`, `end_date`) VALUES (:id, :tukang_id, :alamat,
+        :jobdesk, :harga, :angka, :unik,:promo, :order_date, :startdate, :enddate)";     
 
         //untuk mendapatkan id order yang nantinya akan ditambahkan dengan nomor telepon, 3
         $queryIdOrder = "SELECT `user_id`, max(id) AS id FROM tb_order WHERE `user_id` = :id GROUP BY `user_id` ORDER BY id DESC ";
@@ -650,7 +653,7 @@ return function (App $app) {
                 $stmtInsertOrder = $this->db->prepare($queryMakeOrder);
                 if ($stmtInsertOrder->execute([':id' => $id, ':tukang_id' => $tukang_id, ':alamat' => $alamat,
                 ':jobdesk' => $jobdesk, ':harga' => $nominal, ':angka' => $angka, ':unik' => $angka_unik,':promo' => $promo_id,
-                ':startdate' => $newStartDate, ':enddate' => $newEndDate])) {
+                ':order_date' => $thisdate ,':startdate' => $newStartDate, ':enddate' => $newEndDate])) {
                     $stmtSelectOrder = $this->db->prepare($queryIdOrder);
                     if ($stmtSelectOrder->execute([':id' => $id])) {
                         $stmtKerja = $this->db->prepare($queryStatusTukang);
@@ -686,19 +689,21 @@ return function (App $app) {
         $token_login = $request->getParsedBodyParam('token_login');
         $order_id    = $request->getParsedBodyParam('order_id');
         $tukang_id   = "";
+        $thisdate       = date('Y-m-d H:i:s', time());
 
         $query          =   "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
         $queryCheck     =   "SELECT id, status_order, tukang_id FROM tb_order WHERE `id` = :order_id AND `user_id` = :id";
         $queryCancel    =   "UPDATE
                             tb_order
                             INNER JOIN status_tukang ON tb_order.tukang_id = status_tukang.tukang_id
-                            SET tb_order.status_order = '0', status_tukang.kerja = '0'
+                            SET tb_order.status_order = '0', status_tukang.kerja = '0', tb_order.finish_date = :finishdate
                             WHERE tb_order.status_order = '1' AND status_tukang.tukang_id = :tukang_id AND tb_order.id = :order";
         $queryCancel2   =   "UPDATE
                             tb_order
                             INNER JOIN tb_pembayaran ON tb_order.id = tb_pembayaran.order_id
                             INNER JOIN status_tukang ON tb_order.tukang_id = status_tukang.tukang_id
                             SET tb_order.status_order = '0', tb_pembayaran.status_pembayaran = '4', status_tukang.kerja = '0'
+                            , tb_order.finish_date = :finishdate
                             WHERE (tb_pembayaran.status_pembayaran = '0' OR tb_pembayaran.status_pembayaran = '3')
                             AND tb_order.status_order = '2' AND status_tukang.tukang_id = :tukang_id
                             AND tb_order.id = :order AND tb_order.user_id = :id";
@@ -721,7 +726,7 @@ return function (App $app) {
                     $rowStatus  = $result['status_order']; 
                     $tukang_id = $result['tukang_id'];
                     if ($result && $rowStatus === '1') {
-                        if ($stmtUpdate->execute([':tukang_id' => $tukang_id, ':order' => $order_id])) {
+                        if ($stmtUpdate->execute([':tukang_id' => $tukang_id, ':order' => $order_id, ':finishdate' => $thisdate])) {
                             return $response->withJson(["code"=>200, "msg"=>"Order dibatalkan!"]);
                        }
                        return $response->withJson(["code"=>201, "msg"=>"Input salah!"]);
@@ -732,7 +737,7 @@ return function (App $app) {
                                if ($cek && $rowstat === '1') {
                                 return $response->withJson(["code"=>201, "msg"=>"Pembayaran sedang diproses!"]);
                                }else if ($cek && ($rowstat === '3' || $rowstat === '0')) {
-                                $stmtUpdate2->execute([':tukang_id' => $tukang_id, ':id' => $user_id, ':order' => $order_id]);
+                                $stmtUpdate2->execute([':tukang_id' => $tukang_id, ':id' => $user_id, ':order' => $order_id, ':finishdate' => $thisdate]);
                                 return $response->withJson(["code"=>200, "msg"=>"Order dibatalkan!"]);      
                                }else{
                                 return $response->withJson(["code"=>201, "msg"=>"Pembayaran sudah diterima!"]);
@@ -852,9 +857,9 @@ return function (App $app) {
                         if ($stmtUpdate->execute([':tukang_id' => $tukang_id, ':order' => $order_id, ':endorder' => $end_order])) {
                             $title = "Order";
                             $message = "Yeay! orderan $codeOrder telah selesai! Terimakasih telah menggunakan jasa kami!";
-                            $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`) VALUE ('$user_id', '$title', '$message')";
+                            $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE ('$user_id', '$title', '$message', :createdate)";
                             $stmtNotif = $this->db->prepare($queryNotif);
-                            $stmtNotif->execute();
+                            $stmtNotif->execute([':createdate' => $end_order]);
                                         
                             $sql = "SELECT `token_firebase` FROM `tb_user` WHERE `user_id` = '$user_id'";
             
@@ -1152,7 +1157,7 @@ return function (App $app) {
         INNER JOIN tb_tukang ON tb_order.tukang_id = tb_tukang.tukang_id
         WHERE (tb_order.status_order >=1 AND tb_order.status_order < 4)
         AND (tb_order.user_id = :id)
-        ORDER BY  tb_order.order_date DESC LIMIT 30 OFFSET $page_count";
+        ORDER BY  tb_order.order_date DESC";
 
         $stmt = $this->db->prepare($queryListOrder);
         if ($stmt->execute([':id' => $id])) {
@@ -1428,6 +1433,58 @@ return function (App $app) {
         return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
     });
 
+    $app->post('/user/give_apprespon', function($request, $response){
+        $user_id = $request->getParsedBodyParam('user_id');
+        $token_login = $request->getParsedBodyParam('token_login');
+        $rating = $request->getParsedBodyParam('rating');
+        $comment = $request->getParsedBodyParam('komen');
+        
+        $query = "SELECT `user_id`, token_login FROM tb_user WHERE `user_id` = :id AND token_login = :token";
+        $queryInsert = "INSERT INTO tb_penilaian_aplikasi (`user_id`, `rating`, `comment`) VALUES (:u_id, :rating, :comment)";
+
+        $stmt = $this->db->prepare($query);
+        if ($stmt->execute([':id' => $user_id, ':token' =>$token_login])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmtInsert = $this->db->prepare($queryInsert);
+                if ($stmtInsert->execute([':u_id' => $user_id, ':rating' => $rating, ':comment' => $comment])) {
+                    return $response->withJson(["code"=>200, "msg"=>"Berhasil mendapatkan data!"]);
+                }
+            return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+            }
+            return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+        }
+        return $response->withJson(["code"=>201, "msg"=>"Gagal mendapatkan data!"]);
+        
+    });
+
+
+
+
+
+
+     //---------------------------------------------------------------------------------------------------------//
+    //------------------------------------------------CRON JOB-----------------------------------------------//
+   //---------------------------------------------------------------------------------------------------------//
+
+   $app->get('/d5df3d516f494df7a0780f0be0fd24a36446a9a7052eb335974865673c38ceae', function($request, $response){
+    $timeUpdate  = date('Y-m-d H:i:s', time());
+    $query = "UPDATE
+    status_tukang
+    INNER JOIN tb_order ON status_tukang.tukang_id = tb_order.tukang_id
+    INNER JOIN tb_pembayaran ON tb_order.tukang_id = tb_pembayaran.tukang_id
+    SET
+    status_tukang.kerja = '0', tb_order.status_order = '0', tb_pembayaran.status_pembayaran = '4'
+    WHERE
+    tb_pembayaran.end_date < :waktu 
+    AND
+    (tb_pembayaran.status_pembayaran = '0' 
+     OR tb_pembayaran.status_pembayaran ='3')";
+
+     $stmt = $this->db->prepare($query);
+     $stmt->execute([':waktu' => $timeUpdate]);
+   });
+   
 
     
 
@@ -1472,6 +1529,9 @@ return function (App $app) {
     
     // });
 
+   
+
+
 
 
 
@@ -1493,7 +1553,6 @@ return function (App $app) {
         $password   = $request->getParsedBodyParam('password');
         $nik        = $request->getParsedBodyParam('nik');
         $anggota    = $request->getParsedBodyParam('anggota');
-
         $provinsi   = $request->getParsedBodyParam('provinsi');
         $kota       = $request->getParsedBodyParam('kota');
         $kec        = $request->getParsedBodyParam('kec');
@@ -1677,6 +1736,7 @@ return function (App $app) {
         $status         = $request->getParsedBodyParam('status');
         $harga          = "";
         $end_pem        = date('Y-m-d H:i:s', time()+2*60*60);
+        $thisdate       = date('Y-m-d H:i:s', time());
 
         $nominal = "";
         $title = "Order";
@@ -1688,8 +1748,9 @@ return function (App $app) {
         $queryGetPromo  = "SELECT isi_promo FROM tb_promo WHERE `id` = :id";
         $query          = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
         $updateRespon   = "UPDATE tb_order SET status_order = :status_order WHERE tukang_id = :id AND id = :order";
+        $updateRespon2   = "UPDATE tb_order SET status_order = :status_order, finish_date = :finishdate WHERE tukang_id = :id AND id = :order";
         $queryPayment   = "INSERT INTO tb_pembayaran (`order_id`, `user_id`, `tukang_id`,
-        nominal, end_date) VALUES (:order_id, :id, :tukang_id, :nominal, :enddate)";
+        nominal, create_date, end_date) VALUES (:order_id, :id, :tukang_id, :nominal, :create_date, :enddate)";
 
         $queryIdPembayaran     = "SELECT `user_id`, max(id) AS id FROM tb_pembayaran WHERE `user_id` = :id GROUP BY `user_id` ORDER BY id DESC ";
         $queryUpdatePembayaran = "UPDATE tb_pembayaran SET code_pembayaran = :code_pembayaran WHERE id = :id AND `user_id` = :u_id";
@@ -1713,7 +1774,7 @@ return function (App $app) {
                     if ($rowHarPro != '0') {
                         $nominal    = $rowHarPro;
                     }else{
-                        $nominal = $harga+$angka_unik;
+                        $nominal = $harga+$rowAngka;
                     }
                 }       
             }
@@ -1732,11 +1793,9 @@ return function (App $app) {
         if ($stmt->execute([':id' => $tukang_id, ':token' =>$token_login])) {
             $result = $stmt->fetch();
             if ($result) {
-                $stmtUpOrder    = $this->db->prepare($updateRespon);
-                $stmtUpOrder->execute([':status_order' => $status, ':id' => $tukang_id, ':order' => $order_id]);
-                $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`) VALUE ('$user_id', '$title', '$message')";
+                $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE ('$user_id', '$title', '$message', :createdate)";
                 $stmtNotif = $this->db->prepare($queryNotif);
-                $stmtNotif->execute();
+                $stmtNotif->execute([':createdate' =>$thisdate]);
                             
                 $sql = "SELECT `token_firebase` FROM `tb_user` WHERE `user_id` = '$user_id'";
 
@@ -1772,9 +1831,11 @@ return function (App $app) {
                                 curl_close($ch);
                                 }
                 if ($status === '2') {
+                    $stmtUpOrder    = $this->db->prepare($updateRespon);
+                    $stmtUpOrder->execute([':status_order' => $status, ':id' => $tukang_id, ':order' => $order_id]);
                     $stmtInsertPembayaran = $this->db->prepare($queryPayment);
                     if ($stmtInsertPembayaran->execute([':order_id' => $order_id, ':id' => $user_id, ':tukang_id' => $tukang_id,
-                        ':nominal' => $nominal, ':enddate' => $end_pem])) {
+                        ':nominal' => $nominal, ':create_date' =>$thisdate,':enddate' => $end_pem])) {
                         $stmtTel    = $this->db->prepare($queryUser);
                         $stmtIdPem  = $this->db->prepare($queryIdPembayaran);
                         $stmtUpPem  = $this->db->prepare($queryUpdatePembayaran);
@@ -1792,6 +1853,8 @@ return function (App $app) {
                             return $response->withJson(["code"=>201, "msg"=>"Update pembayaran gagal!"]); 
                         }    
                 }elseif($status === '0'){
+                    $stmtUpOrder    = $this->db->prepare($updateRespon2);
+                    $stmtUpOrder->execute([':status_order' => $status, ':id' => $tukang_id, ':order' => $order_id, ':finishdate' =>$thisdate]);
                     $stmtKerja = $this->db->prepare($queryStatusTukang);
                     if ($stmtKerja->execute([':id' => $tukang_id, ':kerja' => $status])) {
                         return $response->withJson(["code"=>200, "msg"=>"Order ditolak!"]);
