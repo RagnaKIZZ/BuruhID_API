@@ -682,7 +682,7 @@ return function (App $app) {
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
                                     $headers = array(
-                                        'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
+                                        'Authorization: key=APIKEY',
                                         'Content-Type: application/json'
                                     );
                                     getNotifikasi($title, $message, $rowToken, $headers);
@@ -896,7 +896,7 @@ return function (App $app) {
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
                                     $headers = array(
-                                        'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
+                                        'Authorization: key=APIKEY',
                                         'Content-Type: application/json'
                                     );
                                     getNotifikasi($title, $message, $rowToken, $headers);
@@ -2102,7 +2102,7 @@ return function (App $app) {
                     $rowToken[] = $result1['token_firebase'];
                     if ($rowToken) {
                         $headers = array(
-                            'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
+                            'Authorization: key=APIKEY',
                             'Content-Type: application/json'
                         );
                         getNotifikasi($title, $message, $rowToken, $headers);
@@ -2249,7 +2249,7 @@ return function (App $app) {
         );
 
         // $headers = array(
-        //     'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
+        //     'Authorization: key=APIKEY',
         //     'Content-Type: application/json'
         // );
 
