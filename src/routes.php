@@ -681,7 +681,15 @@ return function (App $app) {
                                 $result1 = $stmt->fetch();
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
+<<<<<<< HEAD
                                     getNotifikasi($title, $message, $rowToken, headerTukang());
+=======
+                                    $headers = array(
+                                        'Authorization: key=APIKEY',
+                                        'Content-Type: application/json'
+                                    );
+                                    getNotifikasi($title, $message, $rowToken, $headers);
+>>>>>>> c2bf6b3f36b177c47348e8d56e29f92c9984060e
                                 }
                             }
                             $code_order = "OR" . $rowTelepon . $rowIdOrder;
@@ -891,7 +899,15 @@ return function (App $app) {
                                 $result1 = $stmt->fetch();
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
+<<<<<<< HEAD
                                     getNotifikasi($title, $message, $rowToken, headerUser());
+=======
+                                    $headers = array(
+                                        'Authorization: key=APIKEY',
+                                        'Content-Type: application/json'
+                                    );
+                                    getNotifikasi($title, $message, $rowToken, $headers);
+>>>>>>> c2bf6b3f36b177c47348e8d56e29f92c9984060e
                                 }
                                 return $response->withJson(["code" => 200, "msg" => "Order selesai!"]);
                             }
@@ -2139,7 +2155,15 @@ return function (App $app) {
                     $result1 = $stmt->fetch();
                     $rowToken[] = $result1['token_firebase'];
                     if ($rowToken) {
+<<<<<<< HEAD
                         getNotifikasi($title, $message, $rowToken, headerUser());
+=======
+                        $headers = array(
+                            'Authorization: key=APIKEY',
+                            'Content-Type: application/json'
+                        );
+                        getNotifikasi($title, $message, $rowToken, $headers);
+>>>>>>> c2bf6b3f36b177c47348e8d56e29f92c9984060e
                     }
                     if ($status === '2') {
                         $stmtUpOrder    = $this->db->prepare($updateRespon);
@@ -2283,7 +2307,7 @@ return function (App $app) {
         );
 
         // $headers = array(
-        //     'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
+        //     'Authorization: key=APIKEY',
         //     'Content-Type: application/json'
         // );
 
