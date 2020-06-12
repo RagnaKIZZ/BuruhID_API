@@ -681,11 +681,7 @@ return function (App $app) {
                                 $result1 = $stmt->fetch();
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
-                                    $headers = array(
-                                        'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
-                                        'Content-Type: application/json'
-                                    );
-                                    getNotifikasi($title, $message, $rowToken, $headers);
+                                    getNotifikasi($title, $message, $rowToken, headerTukang());
                                 }
                             }
                             $code_order = "OR" . $rowTelepon . $rowIdOrder;
@@ -895,11 +891,7 @@ return function (App $app) {
                                 $result1 = $stmt->fetch();
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
-                                    $headers = array(
-                                        'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
-                                        'Content-Type: application/json'
-                                    );
-                                    getNotifikasi($title, $message, $rowToken, $headers);
+                                    getNotifikasi($title, $message, $rowToken, headerUser());
                                 }
                                 return $response->withJson(["code" => 200, "msg" => "Order selesai!"]);
                             }
@@ -1482,6 +1474,10 @@ return function (App $app) {
 
     $app->get('/d5df3d516f494df7a0780f0be0fd24a36446a9a7052eb335974865673c38ceae', function ($request, $response) {
         $timeUpdate  = date('Y-m-d H:i:s', time());
+
+        $title   = "Pembayaran";
+        $message = "Opps, jangka waktu pembayaran anda habis. Mohon maaf order akan kami cancel, terimakasih";
+
         $query = "UPDATE
                 status_tukang
                 INNER JOIN tb_order ON status_tukang.tukang_id = tb_order.tukang_id
@@ -1495,7 +1491,8 @@ return function (App $app) {
                 OR tb_pembayaran.status_pembayaran ='3')";
 
         $queryCheck = "SELECT
-                  status_tukang.kerja,
+                    tb_pembayaran.user_id
+                    status_tukang.kerja,
                     tb_order.status_order,
                     tb_pembayaran.status_pembayaran,
                     tb_pembayaran.end_date,
@@ -1513,44 +1510,61 @@ return function (App $app) {
                     OR tb_pembayaran.status_pembayaran ='3')";
 
 
+        $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE (:id, '$title', '$message', :createdate)";
+
+
+
         $stmt = $this->db->prepare($queryCheck);
         if ($stmt->execute([':waktu' => $timeUpdate])) {
             $result = $stmt->fetchAll();
-            $resultToken[] = $result['token_firebase'];
             if ($result) {
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([':waktu' => $timeUpdate]);
+                $stmtNotif = $this->db->prepare($queryNotif);
+                for ($i = 0; $i < sizeof($result); $i++) {
+                    $user_id = $result[$i]['user_id'];
+                    $token[] = $result[$i]['token_firebase'];
+                    $stmtNotif->execute([':id' => $user_id, ':createdate' => $timeUpdate]);
+                }
+                getNotifikasi($title, $message, $token, headerUser());
             }
         }
     });
 
 
 
-
+    #for broadcast notification
     // $app->get('/tukang/tukang/', function ($request, $response) {
     //     $id = $request->getParsedBodyParam('id');
+    //     $query = "SELECT nama FROM tb_tukang";
 
-    //     $query = "SELECT tukang_id, nama FROM tb_tukang";
-
-    //     $stmt = $this->db->prepare($query);
-    //     if ($stmt->execute()) {
-    //         $result = $stmt->fetchAll();
-    //         // $nama = $result['nama'];
-    //         for ($i = 0; $i < sizeof($result); $i++) {
-    //             $hasil = $result[$i];
-    //             $nama = $hasil['nama'];
-    //             echo $nama ;
-    //         }
-    // return $response->withJson([$result[1]]);
-    // foreach ($) {
-    //     echo $namee;
-    //     echo "<br>";
+    // $stmt = $this->db->prepare($query);
+    // if ($stmt->execute()) {
+    //     $result1 = $stmt->fetchAll();
+    //     $nama = $result1[1]['nama'];
+    //     echo $nama;
     // }
-    // echo $result;
-    // $rowRating = $result['rating'];
-    // $jumlah = $rowRating / 2;
-    // echo $jumlah;
+
+    // $query = "SELECT token_firebase FROM tb_tukang";
+
+    // $stmt = $this->db->prepare($query);
+    // if ($stmt->execute()) {
+    //     $result1 = $stmt->fetchAll();
+    //     $title = "test";
+    //     $message = "test juga";
+
+    //     for ($i = 0; $i < sizeof($result1); $i++) {
+    //         $result[] = $result1[$i]['token_firebase'];
     //     }
+
+    //     print_r($result);
+
+    //     $headers = array(
+    //         'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
+    //         'Content-Type: application/json'
+    //     );
+    //     getNotifikasi($title, $message, $result, $headers);
+    // }
     // });
 
     // to get current time indonesia
@@ -1579,6 +1593,30 @@ return function (App $app) {
     //     }
 
     // });
+
+
+    #multiple insert db
+    $app->get('/test/test/', function ($request, $response) {
+        $thisdate  = date('Y-m-d H:i:s', time());
+        $title = "Orderan";
+        $message = "Ada orderan masuk nih! Yukk cek sekarang juga!";
+        $query = "SELECT * FROM tb_tukang";
+        $queryNotif = "INSERT INTO tb_notif_tukang (`tukang_id`, title, `message`, create_date) VALUE (:id, '$title', '$message', :createdate)";
+        $stmtNotif = $this->db->prepare($queryNotif);
+        $stmt = $this->db->prepare($query);
+        if ($stmt->execute()) {
+            $result = $stmt->fetchAll();
+            if ($result) {
+                for ($i = 0; $i < sizeof($result); $i++) {
+                    $tukang_id = $result[$i]['tukang_id'];
+                    $tukangFire[] = $result[$i]['token_firebase'];
+                    $stmtNotif->execute([':id' => $tukang_id, ':createdate' => $thisdate]);
+                    echo $tukang_id;
+                }
+                getNotifikasi($title, $message, $tukangFire, headerTukang());
+            }
+        }
+    });
 
 
 
@@ -2101,11 +2139,7 @@ return function (App $app) {
                     $result1 = $stmt->fetch();
                     $rowToken[] = $result1['token_firebase'];
                     if ($rowToken) {
-                        $headers = array(
-                            'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
-                            'Content-Type: application/json'
-                        );
-                        getNotifikasi($title, $message, $rowToken, $headers);
+                        getNotifikasi($title, $message, $rowToken, headerUser());
                     }
                     if ($status === '2') {
                         $stmtUpOrder    = $this->db->prepare($updateRespon);
@@ -2267,5 +2301,23 @@ return function (App $app) {
         }
         // $result = curl_exec($ch);
         curl_close($ch);
+    }
+
+    function headerTukang()
+    {
+        $headers = array(
+            'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
+            'Content-Type: application/json'
+        );
+        return $headers;
+    }
+
+    function headerUser()
+    {
+        $headers = array(
+            'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
+            'Content-Type: application/json'
+        );
+        return $headers;
     }
 };
