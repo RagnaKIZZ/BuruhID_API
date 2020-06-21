@@ -7,6 +7,7 @@ use Slim\Http\Response;
 return function (App $app) {
     date_default_timezone_set('Asia/Jakarta');
     $container = $app->getContainer();
+    $container['view'] = new \Slim\Views\PhpRenderer('../templates/');
 
     // $app->get('/[{name}]', function (Request $request, Response $response, array $args) use ($container) {
     //     // Sample log message
@@ -14,6 +15,17 @@ return function (App $app) {
 
     //     // Render index view
     //     return $container->get('renderer')->render($response, 'index.phtml', $args);
+    // });
+
+    // $app->get('/this', function (Request $request, Response $response) use ($container) {
+    //     // Sample log message
+    //     $container->get('logger')->info("Slim-Skeleton '/' route");
+    //     $name = "rusdani";
+    //     $code = "12345";
+    //     $response = $this->view->render($response, 'test.phtml', ['nama' => $name, 'code' => $code]);
+
+    //     // Render index view
+    //     return $response;
     // });
 
 
@@ -64,6 +76,7 @@ return function (App $app) {
             ':nama' => $nama, ':email' => $email,
             ':telepon' => $telepon, ':password' => $password
         ])) {
+
             return $response->withJson(["code" => 200, "msg" => "Register berhasil!"]);
         }
         return $response->withJson(["code" => 201, "msg" => "Register gagal!"]);
@@ -668,7 +681,7 @@ return function (App $app) {
                         $result2 = $stmtSelectOrder->fetch();
                         $rowIdOrder = $result2['id'];
                         if ($result2) {
-                            $title = "Orderan";
+                            $title = "Order";
                             $message = "Ada orderan masuk nih! Yukk cek sekarang juga!";
                             $queryNotif = "INSERT INTO tb_notif_tukang (`tukang_id`, title, `message`, `order_id`, create_date) VALUE ('$tukang_id', '$title', '$message', '$rowIdOrder', :createdate)";
                             $stmtNotif = $this->db->prepare($queryNotif);
@@ -681,18 +694,11 @@ return function (App $app) {
                                 $result1 = $stmt->fetch();
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
-<<<<<<< HEAD
                                     getNotifikasi($title, $message, $rowToken, headerTukang());
-=======
-                                    $headers = array(
-                                        'Authorization: key=APIKEY',
-                                        'Content-Type: application/json'
-                                    );
-                                    getNotifikasi($title, $message, $rowToken, $headers);
->>>>>>> c2bf6b3f36b177c47348e8d56e29f92c9984060e
                                 }
                             }
-                            $code_order = "OR" . $rowTelepon . $rowIdOrder;
+                            $shuffle = substr(str_shuffle($rowTelepon), 0, 10);
+                            $code_order = "OR" . $shuffle . $rowIdOrder;
                             $stmtUpdateOrder = $this->db->prepare($queryUpdateOrder);
                             if ($stmtUpdateOrder->execute([':code_order' => $code_order, ':u_id' => $id, ':id' => $rowIdOrder])) {
                                 return $response->withJson(["code" => 200, "msg" => "Order berhasil!"]);
@@ -899,15 +905,7 @@ return function (App $app) {
                                 $result1 = $stmt->fetch();
                                 $rowToken[] = $result1['token_firebase'];
                                 if ($rowToken) {
-<<<<<<< HEAD
                                     getNotifikasi($title, $message, $rowToken, headerUser());
-=======
-                                    $headers = array(
-                                        'Authorization: key=APIKEY',
-                                        'Content-Type: application/json'
-                                    );
-                                    getNotifikasi($title, $message, $rowToken, $headers);
->>>>>>> c2bf6b3f36b177c47348e8d56e29f92c9984060e
                                 }
                                 return $response->withJson(["code" => 200, "msg" => "Order selesai!"]);
                             }
@@ -1488,11 +1486,13 @@ return function (App $app) {
     //------------------------------------------------CRON JOB-----------------------------------------------//
     //---------------------------------------------------------------------------------------------------------//
 
-    $app->get('/d5df3d516f494df7a0780f0be0fd24a36446a9a7052eb335974865673c38ceae', function ($request, $response) {
+    $app->get('/cron_job/d5df3d516f494df7a0780f0be0fd24a36446a9a7052eb335974865673c38ceae', function ($request, $response) {
         $timeUpdate  = date('Y-m-d H:i:s', time());
 
         $title   = "Pembayaran";
         $message = "Opps, jangka waktu pembayaran anda habis. Mohon maaf order akan kami cancel, terimakasih";
+        $title1   = "Orderan";
+        $message1 = "Opps, jangka waktu konfirmasi order anda habis. Mohon maaf order akan kami cancel, terimakasih";
 
         $query = "UPDATE
                 status_tukang
@@ -1507,7 +1507,7 @@ return function (App $app) {
                 OR tb_pembayaran.status_pembayaran ='3')";
 
         $queryCheck = "SELECT
-                    tb_pembayaran.user_id
+                    tb_pembayaran.user_id,
                     status_tukang.kerja,
                     tb_order.status_order,
                     tb_pembayaran.status_pembayaran,
@@ -1526,23 +1526,63 @@ return function (App $app) {
                     OR tb_pembayaran.status_pembayaran ='3')";
 
 
-        $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE (:id, '$title', '$message', :createdate)";
+        $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE (:id, :title, :msg, :createdate)";
+        $queryCheckPending = "SELECT
+                            tb_order.tukang_id,
+                            tb_order.user_id,
+                            tb_order.status_order,
+                            tb_order.order_date,
+                            status_tukang.kerja,
+                            tb_user.token_firebase,
+                            tb_tukang.token_firebase AS token_firebase_tukang
+                            FROM
+                            tb_order
+                            INNER JOIN status_tukang ON tb_order.tukang_id = status_tukang.tukang_id
+                            INNER JOIN tb_user ON tb_order.user_id = tb_user.user_id
+                            INNER JOIN tb_tukang ON tb_order.tukang_id = tb_tukang.tukang_id
+                            WHERE tb_order.status_order = '1' AND :order > DATE_ADD(tb_order.order_date,INTERVAL 5 MINUTE)";
 
-
+        $queryUpdateOrder = "UPDATE 
+                            tb_order
+                            INNER JOIN status_tukang ON tb_order.tukang_id = status_tukang.tukang_id
+                            SET
+                            tb_order.status_order = '0', status_tukang.kerja = '0'
+                            WHERE tb_order.tukang_id = :id ";
 
         $stmt = $this->db->prepare($queryCheck);
+        $stmtNotif = $this->db->prepare($queryNotif);
+        $stmtUpdateOrder = $this->db->prepare($queryUpdateOrder);
+
         if ($stmt->execute([':waktu' => $timeUpdate])) {
             $result = $stmt->fetchAll();
             if ($result) {
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([':waktu' => $timeUpdate]);
-                $stmtNotif = $this->db->prepare($queryNotif);
                 for ($i = 0; $i < sizeof($result); $i++) {
                     $user_id = $result[$i]['user_id'];
                     $token[] = $result[$i]['token_firebase'];
-                    $stmtNotif->execute([':id' => $user_id, ':createdate' => $timeUpdate]);
+                    $stmtNotif->execute([':id' => $user_id, ':title' => $title, ':msg' => $message, ':createdate' => $timeUpdate]);
                 }
                 getNotifikasi($title, $message, $token, headerUser());
+            }
+        }
+
+        $stmt1 = $this->db->prepare($queryCheckPending);
+        if ($stmt1->execute([':order' => $timeUpdate])) {
+            $result = $stmt1->fetchAll();
+            if ($result) {
+                for ($i = 0; $i < sizeof($result); $i++) {
+                    $tukang_id = $result[$i]['tukang_id'];
+                    $user_id = $result[$i]['user_id'];
+                    $tokenUser[] = $result[$i]['token_firebase'];
+                    $tokenTukang[] = $result[$i]['token_firebase_tukang'];
+                    $stmtUpdateOrder->execute([':id' => $tukang_id]);
+                    $stmtNotif->execute([':id' => $user_id, ':title' => $title1, ':msg' => $message1, ':createdate' => $timeUpdate]);
+                }
+                getNotifikasi($title1, $message1, $tokenUser, headerUser());
+                getNotifikasi($title1, $message1, $tokenTukang, headerTukang());
+            } else {
+                return $timeUpdate;
             }
         }
     });
@@ -1550,38 +1590,69 @@ return function (App $app) {
 
 
     #for broadcast notification
-    // $app->get('/tukang/tukang/', function ($request, $response) {
-    //     $id = $request->getParsedBodyParam('id');
-    //     $query = "SELECT nama FROM tb_tukang";
+    $app->get('/tukang/tukang/', function ($request, $response) {
+        // $id = $request->getParsedBodyParam('id');
+        // $query = "SELECT nama FROM tb_tukang";
 
-    // $stmt = $this->db->prepare($query);
-    // if ($stmt->execute()) {
-    //     $result1 = $stmt->fetchAll();
-    //     $nama = $result1[1]['nama'];
-    //     echo $nama;
-    // }
+        // $stmt = $this->db->prepare($query);
+        // if ($stmt->execute()) {
+        //     $result1 = $stmt->fetchAll();
+        //     $nama = $result1[1]['nama'];
+        //     echo $nama;
+        // }
 
-    // $query = "SELECT token_firebase FROM tb_tukang";
+        $timeUpdate  = date('Y-m-d H:i:s', time());
 
-    // $stmt = $this->db->prepare($query);
-    // if ($stmt->execute()) {
-    //     $result1 = $stmt->fetchAll();
-    //     $title = "test";
-    //     $message = "test juga";
+        $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE (:id, :title, :msg, :createdate)";
+        $stmtNotif = $this->db->prepare($queryNotif);
 
-    //     for ($i = 0; $i < sizeof($result1); $i++) {
-    //         $result[] = $result1[$i]['token_firebase'];
-    //     }
 
-    //     print_r($result);
+        $query = "SELECT * FROM tb_user WHERE `user_id` = '2'";
 
-    //     $headers = array(
-    //         'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
-    //         'Content-Type: application/json'
-    //     );
-    //     getNotifikasi($title, $message, $result, $headers);
-    // }
-    // });
+        $stmt = $this->db->prepare($query);
+        if ($stmt->execute()) {
+            $result1 = $stmt->fetch();
+            $title = "cok";
+            $message = "cokok";
+
+            // for ($i = 0; $i < sizeof($result1); $i++) {
+            //     $result[] = $result1[$i]['token_firebase'];
+            // }
+
+            // print_r($result);
+            $stmtNotif->execute([':id' => '2', ':title' => $title, ':msg' => $message, ':createdate' => $timeUpdate]);
+
+
+            $rowToken[] = $result1['token_firebase'];
+
+            // $url = 'https://fcm.googleapis.com/fcm/send';
+            // $fields = array(
+            //     'registration_ids' => $rowToken,
+            //     'data' => array("title" => $title, "message" => $message)
+            // );
+
+            // $headers = array(
+            //     'Authorization: key=AAAAorU_zfc:APA91bHLf0lx2Dy-CanYS2C2dvHd51-E0GDCIHPLYnGLXsjHzFEkcw0rHUJZ1cEtAgRx8EMvkeEJy9GELfbvVb9504aFGv2T9ljypPME4GONSWpnaVJJzKQjlZXBnvkYLX12-Yo2mAn-',
+            //     'Content-Type: application/json'
+            // );
+
+            // $ch = curl_init();
+            // curl_setopt($ch, CURLOPT_URL, $url);
+            // curl_setopt($ch, CURLOPT_POST, true);
+            // curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            // curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            // curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            // curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($fields));
+            // $result1 = curl_exec($ch);
+            // if ($result1 === FALSE) {
+            //     die('Curl failed: ' . curl_error($ch));
+            // }
+            // $result = curl_exec($ch);
+            // echo $result;
+            // curl_close($ch);
+            getNotifikasi($title, $message, $rowToken, headerUser());
+        }
+    });
 
     // to get current time indonesia
     // $app->get('/user/update_email/', function($request, $response){
@@ -1612,27 +1683,27 @@ return function (App $app) {
 
 
     #multiple insert db
-    $app->get('/test/test/', function ($request, $response) {
-        $thisdate  = date('Y-m-d H:i:s', time());
-        $title = "Orderan";
-        $message = "Ada orderan masuk nih! Yukk cek sekarang juga!";
-        $query = "SELECT * FROM tb_tukang";
-        $queryNotif = "INSERT INTO tb_notif_tukang (`tukang_id`, title, `message`, create_date) VALUE (:id, '$title', '$message', :createdate)";
-        $stmtNotif = $this->db->prepare($queryNotif);
-        $stmt = $this->db->prepare($query);
-        if ($stmt->execute()) {
-            $result = $stmt->fetchAll();
-            if ($result) {
-                for ($i = 0; $i < sizeof($result); $i++) {
-                    $tukang_id = $result[$i]['tukang_id'];
-                    $tukangFire[] = $result[$i]['token_firebase'];
-                    $stmtNotif->execute([':id' => $tukang_id, ':createdate' => $thisdate]);
-                    echo $tukang_id;
-                }
-                getNotifikasi($title, $message, $tukangFire, headerTukang());
-            }
-        }
-    });
+    // $app->get('/test/test/', function ($request, $response) {
+    //     $thisdate  = date('Y-m-d H:i:s', time());
+    //     $title = "Orderan";
+    //     $message = "Ada orderan masuk nih! Yukk cek sekarang juga!";
+    //     $query = "SELECT * FROM tb_tukang";
+    //     $queryNotif = "INSERT INTO tb_notif_tukang (`tukang_id`, title, `message`, create_date) VALUE (:id, '$title', '$message', :createdate)";
+    //     $stmtNotif = $this->db->prepare($queryNotif);
+    //     $stmt = $this->db->prepare($query);
+    //     if ($stmt->execute()) {
+    //         $result = $stmt->fetchAll();
+    //         if ($result) {
+    //             for ($i = 0; $i < sizeof($result); $i++) {
+    //                 $tukang_id = $result[$i]['tukang_id'];
+    //                 $tukangFire[] = $result[$i]['token_firebase'];
+    //                 $stmtNotif->execute([':id' => $tukang_id, ':createdate' => $thisdate]);
+    //                 echo $tukang_id;
+    //             }
+    //             getNotifikasi($title, $message, $tukangFire, headerTukang());
+    //         }
+    //     }
+    // });
 
 
 
@@ -1875,6 +1946,37 @@ return function (App $app) {
     });
 
 
+    $app->post('/tukang/changePass', function ($request, $response) {
+        $id             = $request->getParsedBodyParam('id');
+        $token_login    = $request->getParsedBodyParam('token_login');
+        $password_lama  = $request->getParsedBodyParam('password');
+        $password_baru  = $request->getParsedBodyParam('new_password');
+
+        if (empty($password_baru) || empty($password_lama) || empty($id) || empty($token_login)) {
+            return $response->withJson(["code" => 201, "msg" => "Lengkapi data!"]);
+        }
+        $querySelect = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token AND `password` = MD5(:pass)";
+        $query = "UPDATE tb_tukang set `password` = MD5(:password_baru) WHERE `tukang_id` = :id 
+                  AND `token_login` = :token_login AND `password` = MD5(:password_lama)";
+
+        $stmt = $this->db->prepare($querySelect);
+        if ($stmt->execute([':id' => $id, ':token' => $token_login, ':pass' => $password_lama])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmt1 = $this->db->prepare($query);
+                if ($stmt1->execute([
+                    ':id' => $id, ':token_login' => $token_login,
+                    ':password_lama' => $password_lama, ':password_baru' => $password_baru
+                ])) {
+                    return $response->withJson(["code" => 200, "msg" => "Update password berhasil!"]);
+                }
+                return $response->withJson(["code" => 201, "msg" => "Update password gagal!"]);
+            }
+            return $response->withJson(["code" => 201, "msg" => "Password salah!"]);
+        }
+        return $response->withJson(["code" => 201, "msg" => "Update password gagal!"]);
+    });
+
 
     $app->post('/tukang/update_firebase_token', function ($request, $response) {
         $id             = $request->getParsedBodyParam('id');
@@ -1902,6 +2004,46 @@ return function (App $app) {
         return $response->withJson(["code" => 201, "msg" => "Update token gagal3!"]);
     });
 
+
+    $app->post('/tukang/changeLocation', function ($request, $response) {
+        $id             = $request->getParsedBodyParam('id');
+        $token_login    = $request->getParsedBodyParam('token_login');
+        $kota           = $request->getParsedBodyParam('kota');
+        $kec            = $request->getParsedBodyParam('kec');
+        $kel            = $request->getParsedBodyParam('kel');
+        $alamat         = $request->getParsedBodyParam('alamat');
+        $password       = $request->getParsedBodyParam('password');
+
+        $query          =   "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
+        $queryUpdate    =   "UPDATE 
+                            alamat_tukang
+                            INNER JOIN tb_tukang ON alamat_tukang.tukang_id = tb_tukang.tukang_id
+                            SET
+                            alamat_tukang.kota = '$kota', alamat_tukang.kecamatan = '$kec',
+                            alamat_tukang.kelurahan = '$kel', alamat_tukang.alamat = '$alamat'
+                            WHERE
+                            alamat_tukang.tukang_id = '$id' AND tb_tukang.`password` =  MD5('$password')";
+
+        if (
+            empty($kel) || empty($kota) || empty($kec) || empty($alamat)
+        ) {
+            return $response->withJson(["code" => 201, "msg" => "Lengkapi Data"]);
+        }
+
+        $stmt = $this->db->prepare($query);
+        if ($stmt->execute([':id' => $id, ':token' => $token_login])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmtUpdate = $this->db->prepare($queryUpdate);
+                if ($stmtUpdate->execute()) {
+                    return $response->withJson(["code" => 200, "msg" => "Update lokasi berhasil!"]);
+                }
+                return $response->withJson(["code" => 201, "msg" => "Update lokasi gagal!"]);
+            }
+            return $response->withJson(["code" => 201, "msg" => "Update lokasi gagal!"]);
+        }
+        return $response->withJson(["code" => 201, "msg" => "Update lokasi gagal!"]);
+    });
 
     $app->post('/tukang/getActivities', function ($request, $response) {
         $id             = $request->getParsedBodyParam('id');
@@ -2010,16 +2152,26 @@ return function (App $app) {
 
         $query          = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
         $queryUpdate    = "UPDATE status_tukang set aktif = :aktif WHERE `tukang_id` = :id";
+        $querySelect    = "SELECT * FROM status_tukang WHERE tukang_id = :id AND kerja = '0' ";
 
         $stmt = $this->db->prepare($query);
         if ($stmt->execute([':id' => $id, ':token' => $token_login])) {
             $result = $stmt->fetch();
             if ($result) {
                 $stmt1 = $this->db->prepare($queryUpdate);
-                if ($stmt1->execute([':aktif' => $aktif, ':id' => $id])) {
-                    return $response->withJson(["code" => 200, "msg" => "Update status berhasil!"]);
+                $stmt2 = $this->db->prepare($querySelect);
+                if ($stmt2->execute([':id' => $id])) {
+                    $hasil = $stmt2->fetch();
+                    if ($hasil) {
+                        if ($stmt1->execute([':aktif' => $aktif, ':id' => $id])) {
+                            return $response->withJson(["code" => 200, "msg" => "Update status berhasil!"]);
+                        }
+                        return $response->withJson(["code" => 201, "msg" => "Update status gagal!"]);
+                    } else {
+                        return $response->withJson(["code" => 201, "msg" => "Status sedang pending atau bekerja!"]);
+                    }
+                    return $response->withJson(["code" => 201, "msg" => "Gagal mendapatkan data!"]);
                 }
-                return $response->withJson(["code" => 201, "msg" => "Update status gagal!"]);
             }
             return $response->withJson(["code" => 201, "msg" => "Update status gagal!"]);
         }
@@ -2155,15 +2307,7 @@ return function (App $app) {
                     $result1 = $stmt->fetch();
                     $rowToken[] = $result1['token_firebase'];
                     if ($rowToken) {
-<<<<<<< HEAD
                         getNotifikasi($title, $message, $rowToken, headerUser());
-=======
-                        $headers = array(
-                            'Authorization: key=APIKEY',
-                            'Content-Type: application/json'
-                        );
-                        getNotifikasi($title, $message, $rowToken, $headers);
->>>>>>> c2bf6b3f36b177c47348e8d56e29f92c9984060e
                     }
                     if ($status === '2') {
                         $stmtUpOrder    = $this->db->prepare($updateRespon);
@@ -2206,14 +2350,13 @@ return function (App $app) {
         }
     });
 
-
-
     $app->post('/tukang/start_working', function ($request, $response) {
-        // $user_id        = $request->getParsedBodyParam('user_id');
+        $user_id        = "";
         $tukang_id      = $request->getParsedBodyParam('tukang_id');
         $token_login    = $request->getParsedBodyParam('token_login');
         $order_id       = $request->getParsedBodyParam('order_id');
         $start_date     = date('Y-m-d H:i:s', time());
+
 
         if (empty($tukang_id) || empty($token_login) || empty($order_id)) {
             return $response->withJson(["code" => 201, "msg" => "Lengkapi Data"]);
@@ -2222,14 +2365,18 @@ return function (App $app) {
         $query          = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
         $updateRespon   = "UPDATE tb_order SET status_order = '3' WHERE tukang_id = :id AND id = :order";
         $queryGetOrderr = "SELECT
+                            tb_order.user_id,
                             tb_order.start_date,
                             tb_order.status_order,
+                            tb_order.code_order,
                             tb_pembayaran.status_pembayaran
                             FROM
                             tb_order
                             INNER JOIN tb_pembayaran ON tb_order.id = tb_pembayaran.order_id
                             WHERE tb_pembayaran.status_pembayaran = '2' 
                             AND tb_order.status_order = '2' AND tb_order.id = :id";
+
+        $queryTokenUser = "SELECT token_firebase FROM tb_user WHERE `user_id` = :id ";
 
         $queryStatusTukang = "UPDATE status_tukang set kerja = '2' WHERE tukang_id = :id";
 
@@ -2241,11 +2388,23 @@ return function (App $app) {
                 if ($stmt->execute([':id' => $order_id])) {
                     $result = $stmt->fetch();
                     $rowStart = $result['start_date'];
+                    $user_id = $result['user_id'];
+                    $codeOrder = $result['code_order'];
+                    $stmtUser = $this->db->prepare($queryTokenUser);
+                    $stmtUser->execute([':id' => $user_id]);
+                    $hasil = $stmtUser->fetch();
+                    $token[] = $hasil['token_firebase'];
                     if ($result && $rowStart <= $start_date) {
                         $stmtStart = $this->db->prepare($updateRespon);
                         $stmtStart->execute([':id' => $tukang_id, ':order' => $order_id]);
                         $stmtStat = $this->db->prepare($queryStatusTukang);
                         $stmtStat->execute([':id' => $tukang_id]);
+                        $title = "Order";
+                        $message = "Yeay! orderan $codeOrder dimulai! Yukk cek perkembangannya!";
+                        $queryNotif = "INSERT INTO tb_notif_user (`user_id`, title, `message`, create_date) VALUE ('$user_id', '$title', '$message', :createdate)";
+                        $stmtNotif = $this->db->prepare($queryNotif);
+                        getNotifikasi($title, $message, $token, headerUser());
+                        $stmtNotif->execute([':createdate' => $start_date]);
                         return $response->withJson(["code" => 200, "msg" => "Pekerjaan dimulai!"]);
                     } elseif ($result && $rowStart >= $start_date) {
                         return $response->withJson(["code" => 201, "msg" => "Belum waktunya!"]);
@@ -2253,6 +2412,60 @@ return function (App $app) {
                     return $response->withJson(["code" => 201, "msg" => "Input Salah!"]);
                 }
                 return $response->withJson(["code" => 201, "msg" => "Input Salah!"]);
+            }
+            return $response->withJson(["code" => 201, "msg" => "Input Salah1!"]);
+        }
+        return $response->withJson(["code" => 201, "msg" => "Input Salah!"]);
+    });
+
+
+    $app->post('/tukang/getNotifikasiOrderan', function ($request, $response) {
+        $id             = $request->getParsedBodyParam('id');
+        $token_login    = $request->getParsedBodyParam('token');
+
+        if (empty($id) || empty($token_login)) {
+            return $response->withJson(["code" => 201, "msg" => "Lengkapi Data"]);
+        }
+
+        $queryCheck = "SELECT * FROM tb_tukang WHERE `tukang_id` = :id AND `token_login` = :token";
+        $queryGetNotif = "SELECT
+                            tb_notif_tukang.id,
+                            tb_order.tukang_id,
+                            tb_notif_tukang.order_id,
+                            tb_notif_tukang.title,
+                            tb_notif_tukang.message,
+                            tb_notif_tukang.create_date,
+                            tb_notif_tukang.isRead,
+                            tb_order.code_order,
+                            tb_order.alamat,
+                            tb_order.jobdesk,
+                            tb_order.harga,
+                            tb_order.status_order,
+                            tb_order.order_date,
+                            tb_order.end_date,
+                            tb_order.start_date,
+                            tb_order.finish_date,
+                            tb_user.nama,
+                            tb_user.telepon
+                            FROM
+                            tb_notif_tukang
+                            INNER JOIN tb_order ON tb_notif_tukang.order_id = tb_order.id
+                            INNER JOIN tb_user ON tb_order.user_id = tb_user.user_id
+                            WHERE 
+                            tb_notif_tukang.tukang_id = :id";
+
+        $stmt1 = $this->db->prepare($queryCheck);
+        if ($stmt1->execute([':id' => $id, ':token' => $token_login])) {
+            $result = $stmt1->fetch();
+            if ($result) {
+                $stmt = $this->db->prepare($queryGetNotif);
+                if ($stmt->execute([':id' => $id])) {
+                    $result = $stmt->fetchAll();
+                    if ($result) {
+                        return $response->withJson(["code" => 200, "msg" => "Berhasil mendapatkan data!", "data" => $result]);
+                    }
+                }
+                return $response->withJson(["code" => 201, "msg" => "Gagal mendapatkan data!"]);
             }
             return $response->withJson(["code" => 201, "msg" => "Input Salah!"]);
         }
@@ -2296,6 +2509,54 @@ return function (App $app) {
         return $response->withJson(["code" => 201, "msg" => "Logout gagal!"]);
     });
 
+    $app->post('/tukang/getNotifikasiOrderan/updateRead', function ($request, $response) {
+        $id             = $request->getParsedBodyParam('id');
+        $token_login    = $request->getParsedBodyParam('token');
+        $idNotif        = $request->getParsedBodyParam('id_notif');
+
+        $queryCheck = "SELECT * FROM tb_tukang WHERE `tukang_id` = :id AND `token_login` = :token";
+        $queryUpdate = "UPDATE tb_notif_tukang SET isRead = '1' WHERE tukang_id = :id AND id = :id_notif";
+
+        $stmt1 = $this->db->prepare($queryCheck);
+        if ($stmt1->execute([':id' => $id, ':token' => $token_login])) {
+            $result = $stmt1->fetch();
+            if ($result) {
+                $stmt = $this->db->prepare($queryUpdate);
+                if ($stmt->execute([':id' => $id, ':id_notif' => $idNotif])) {
+                    return $response->withJson(["code" => 200, "msg" => "Update berhasil!"]);
+                }
+                return $response->withJson(["code" => 201, "msg" => "Update gagal1!"]);
+            }
+            return $response->withJson(["code" => 201, "msg" => "Input salah!"]);
+        }
+        return $response->withJson(["code" => 201, "msg" => "Update gagal3!"]);
+    });
+
+    $app->post('/tukang/getCountNotif', function ($request, $response) {
+        $id          = $request->getParsedBodyParam('id');
+        $token_login = $request->getParsedBodyParam('token');
+        $end_pem     = date('Y-m-d H:i:s', time());
+
+        $query = "SELECT * FROM tb_notif_tukang WHERE `tukang_id` = :id and isRead = '0'";
+        $queryCheck = "SELECT `tukang_id`, token_login FROM tb_tukang WHERE `tukang_id` = :id AND token_login = :token";
+
+        $stmt = $this->db->prepare($queryCheck);
+        if ($stmt->execute([':id' => $id, ':token' => $token_login])) {
+            $result = $stmt->fetch();
+            if ($result) {
+                $stmtNotif = $this->db->prepare($query);
+                if ($stmtNotif->execute([':id' => $id])) {
+                    $notif = $stmtNotif->fetchAll();
+                    $countNotif = count($notif);
+                    return $response->withJson(["code" => 200, "msg" => "Berhasil mendapatkan data!", "countNotif" => $countNotif, "data" => $notif]);
+                }
+                return $response->withJson(["code" => 201, "msg" => "Gagal mendapatkan data!"]);
+            }
+            return $response->withJson(["code" => 201, "msg" => "Gagal mendapatkan data!"]);
+        }
+        return $response->withJson(["code" => 201, "msg" => "Gagal mendapatkan data!"]);
+    });
+
 
 
     function getNotifikasi($title, $message, $rowToken, $headers)
@@ -2307,7 +2568,7 @@ return function (App $app) {
         );
 
         // $headers = array(
-        //     'Authorization: key=APIKEY',
+        //     'Authorization: key=AAAAzamfdmY:APA91bHROa_Aps5tQzdymVBxb7dO2TX8qbH-kBYufSbgunaUjIFAV0OLebobVGcQkWZPAjeGcH0AkIF9xQ9siMi2BK8n8QOLf4wPReaqtpzYVtoTUbnarcJMfllKzXOZlgtjZSu2NwAk',
         //     'Content-Type: application/json'
         // );
 
@@ -2323,7 +2584,8 @@ return function (App $app) {
         if ($result1 === FALSE) {
             die('Curl failed: ' . curl_error($ch));
         }
-        // $result = curl_exec($ch);
+        $result = curl_exec($ch);
+        // echo $result;
         curl_close($ch);
     }
 
